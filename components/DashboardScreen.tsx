@@ -120,15 +120,15 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ stories, isMod
                 </div>
             ) : (
                 <div className="bg-white p-16 rounded-2xl shadow-sm border border-gray-200 text-center">
-                    <p className="text-gray-500">No stories generated yet for today.</p>
-                    <p className="text-sm text-gray-400 mt-1">The pipeline will only fetch emails received today from your whitelisted newsletters.</p>
+                    <p className="text-gray-500">No stories generated yet.</p>
+                    <p className="text-sm text-gray-400 mt-1">The pipeline will fetch emails from the last 30 days from your whitelisted newsletters. Add newsletters in Preferences first.</p>
                     <div className="mt-6 flex flex-col items-center">
                         <Button 
                             onClick={onGenerate} 
                             disabled={!isModelLoaded}
                             className={!isModelLoaded ? "opacity-50 cursor-not-allowed" : ""}
                         >
-                            {isModelLoaded ? "Fetch & Summarize Today's News" : "Regenerate (Model Offline)"}
+                            {isModelLoaded ? "Fetch & Summarize (Last 30 Days)" : "Regenerate (Model Offline)"}
                         </Button>
                         {!isModelLoaded && (
                             <button 

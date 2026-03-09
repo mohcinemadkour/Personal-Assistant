@@ -214,9 +214,8 @@ def run_cmd(cmd: list, timeout: int = 600):
 
 @app.get('/api/ollama/status')
 async def ollama_status():
-    # Check whether ollama CLI is available
-    ok, out, err, code = run_cmd(['which', 'ollama'], timeout=5)
-    cli_available = ok and out.strip() != ''
+    # Check whether ollama CLI is available (cross-platform)
+    cli_available = shutil.which('ollama') is not None
     
     # Check if ollama server is responding
     server_up = False

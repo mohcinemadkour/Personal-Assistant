@@ -6,7 +6,7 @@ import base64
 import requests
 import duckdb
 import uuid
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone, date, timedelta
 from typing import List, Dict, Any
 from difflib import SequenceMatcher
 from email.utils import parsedate_to_datetime, parseaddr
@@ -450,17 +450,17 @@ class NewsPipeline:
             print("[warn] No newsletters in whitelist. Skipping fetch.")
             return []
 
-        # Build Gmail query for today's emails from whitelist
-        today_str = date.today().strftime("%Y/%m/%d")
+        # Build Gmail query for emails from the last 30 days from whitelist
+        thirty_days_ago = (date.today() - timedelta(days=30)).strftime("%Y/%m/%d")
         from_query = " OR ".join([f"from:{email}" for email in whitelist])
-        query = f"after:{today_str} ({from_query})"
+        query = f"after:{thirty_days_ago} ({from_query})"
         
         print(f"[info] Fetching emails with query: {query}")
         service = get_gmail_service()
         emails = fetch_emails_from_gmail(service, max_results=limit, query=query)
         
         if not emails:
-            print("[info] No new emails found for today.")
+            print("[info] No new emails found from the last 30 days.")
             return []
         
         # Save emails to DB

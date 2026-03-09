@@ -112,6 +112,9 @@ const App: React.FC = () => {
             }
         };
 
+        // Poll immediately on mount
+        pollStatus();
+        
         const interval = setInterval(pollStatus, 8000);
         return () => clearInterval(interval);
     }, [isGenerating]);
