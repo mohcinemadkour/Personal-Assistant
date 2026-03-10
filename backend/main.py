@@ -585,14 +585,21 @@ async def ai_helper(payload: dict):
 
 
 @app.get('/api/calendar/events')
-async def get_calendar_events():
-    """Fetch upcoming calendar events from Google Calendar."""
+async def get_calendar_events(days: int = 30):
+    """Fetch upcoming calendar events from Google Calendar.
+    
+    Args:
+        days: Number of days to look ahead (default: 30, max: 365)
+    """
     try:
         from google.auth.transport.requests import Request
         from google.oauth2.credentials import Credentials
         from google_auth_oauthlib.flow import InstalledAppFlow
         import googleapiclient.discovery
         from datetime import datetime, timedelta
+        
+        # Limit days to 1 year max
+        days = min(max(1, days), 365)
         
         SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
         
@@ -651,15 +658,15 @@ async def get_calendar_events():
         # Build Calendar service
         service = googleapiclient.discovery.build('calendar', 'v3', credentials=creds)
         
-        # Get calendar events for the next 30 days
+        # Get calendar events for the specified number of days
         now = datetime.utcnow().isoformat() + 'Z'
-        thirty_days_later = (datetime.utcnow() + timedelta(days=30)).isoformat() + 'Z'
+        future_date = (datetime.utcnow() + timedelta(days=days)).isoformat() + 'Z'
         
         events_result = service.events().list(
             calendarId='primary',
             timeMin=now,
-            timeMax=thirty_days_later,
-            maxResults=50,
+            timeMax=future_date,
+            maxResults=100,
             singleEvents=True,
             orderBy='startTime'
         ).execute()

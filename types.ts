@@ -30,6 +30,7 @@ export enum Screen {
   Home = 'Home',
   Dashboard = 'Dashboard',
   Calendar = 'Calendar',
+  Travel = 'Travel',
   ModelManagement = 'ModelManagement',
   Settings = 'Settings',
   About = 'About',
