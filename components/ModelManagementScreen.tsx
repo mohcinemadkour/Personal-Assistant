@@ -21,65 +21,44 @@ const StatusIndicator: React.FC<{ status: ModelStatus }> = ({ status }) => {
 
 export const ModelManagementScreen: React.FC = () => {
     const [models, setModels] = useState<LocalModel[]>([]);
-    const [ollamaAvailable, setOllamaAvailable] = useState(false);
+    const [apiKeyConfigured, setApiKeyConfigured] = useState(false);
     const [serverUp, setServerUp] = useState(false);
+    const [configuredModel, setConfiguredModel] = useState<string | null>(null);
     const [loadingModel, setLoadingModel] = useState<string | null>(null);
-
-    const RECOMMENDED_MODELS = [
-        { name: 'qwen2.5:0.5b', size: '397MB' },
-        { name: 'llama3.2:1b', size: '1.3GB' },
-        { name: 'phi3:mini', size: '2.3GB' },
-        { name: 'mistral:latest', size: '4.1GB' },
-    ];
 
     const fetchModels = async () => {
         try {
             const [mResp, sResp] = await Promise.all([
                 fetch('/api/models'), 
-                fetch('/api/ollama/status')
+                fetch('/api/openai/status')
             ]);
             
-            let downloadedModels: any[] = [];
-            let runningModels: string[] = [];
+            let openaiModels: any[] = [];
+            let configured = null;
 
             if (sResp.ok) {
                 const sd = await sResp.json();
-                setOllamaAvailable(!!sd.cli_available);
+                setApiKeyConfigured(!!sd.cli_available);
                 setServerUp(!!sd.server_up);
-                runningModels = sd.running_models || [];
             }
 
             if (mResp.ok) {
                 const md = await mResp.json();
-                downloadedModels = md.models || [];
+                openaiModels = md.models || [];
+                configured = md.configured || null;
+                setConfiguredModel(configured);
             }
 
-            // Merge recommended with downloaded
-            const allModels: LocalModel[] = RECOMMENDED_MODELS.map((rec, idx) => {
-                const downloaded = downloadedModels.find(m => m.name.startsWith(rec.name) || rec.name.startsWith(m.name));
-                const isRunning = runningModels.some(rm => rm.startsWith(rec.name) || rec.name.startsWith(rm));
-                
+            // Map OpenAI models to LocalModel format
+            const allModels: LocalModel[] = openaiModels.map((m: any, idx: number) => {
+                const isActive = m.name === configured;
                 return {
-                    id: `rec-${idx}`,
-                    name: rec.name,
-                    size: downloaded ? downloaded.size : rec.size,
-                    status: isRunning ? ModelStatus.Running : (downloaded ? ModelStatus.Idle : ModelStatus.NotDownloaded),
-                    isActive: isRunning
+                    id: `openai-${idx}`,
+                    name: m.name,
+                    size: m.size,
+                    status: ModelStatus.Running,  // OpenAI models are always "available"
+                    isActive: isActive
                 };
-            });
-
-            // Add any other downloaded models not in recommended
-            downloadedModels.forEach((dm, idx) => {
-                if (!allModels.some(am => am.name === dm.name)) {
-                    const isRunning = runningModels.some(rm => rm === dm.name);
-                    allModels.push({
-                        id: `dl-${idx}`,
-                        name: dm.name,
-                        size: dm.size,
-                        status: isRunning ? ModelStatus.Running : ModelStatus.Idle,
-                        isActive: isRunning
-                    });
-                }
             });
 
             setModels(allModels);
@@ -95,36 +74,13 @@ export const ModelManagementScreen: React.FC = () => {
     }, []);
 
     const handlePull = async (name: string) => {
-        setLoadingModel(name);
-        try {
-            const resp = await fetch('/api/models/pull', { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify({ model: name }) 
-            });
-            const data = await resp.json();
-            if (!data.ok) throw new Error(data.err || 'pull failed');
-            fetchModels();
-        } catch (e) {
-            alert('Error pulling model: ' + (e as Error).message);
-        } finally { setLoadingModel(null); }
+        // OpenAI models don't need to be "pulled"
+        alert('OpenAI models are managed via API. No download needed!');
     };
 
     const handleRemove = async (name: string) => {
-        if (!confirm(`Remove model ${name}?`)) return;
-        setLoadingModel(name);
-        try {
-            const resp = await fetch('/api/models/remove', { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify({ model: name }) 
-            });
-            const data = await resp.json();
-            if (!data.ok) throw new Error(data.err || 'remove failed');
-            fetchModels();
-        } catch (e) {
-            alert('Error removing model: ' + (e as Error).message);
-        } finally { setLoadingModel(null); }
+        // OpenAI models can't be removed
+        alert('OpenAI models cannot be removed. They are managed via API.');
     };
 
     const handleActivate = async (name: string) => {
@@ -136,27 +92,10 @@ export const ModelManagementScreen: React.FC = () => {
                 body: JSON.stringify({ model: name }) 
             });
             const data = await resp.json();
-            if (!data.ok) throw new Error(data.error || 'activate failed');
-            // Wait a bit for ollama ps to reflect changes
-            setTimeout(fetchModels, 2000);
+            if (!data.ok) throw new Error(data.error || 'Failed to activate model');
+            fetchModels();
         } catch (e) {
             alert('Error activating model: ' + (e as Error).message);
-        } finally { setLoadingModel(null); }
-    };
-
-    const handleDeactivate = async (name: string) => {
-        setLoadingModel(name);
-        try {
-            const resp = await fetch('/api/models/deactivate', { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify({ model: name }) 
-            });
-            const data = await resp.json();
-            if (!data.ok) throw new Error(data.error || 'deactivate failed');
-            setTimeout(fetchModels, 1000);
-        } catch (e) {
-            alert('Error deactivating model: ' + (e as Error).message);
         } finally { setLoadingModel(null); }
     };
     return (
@@ -165,17 +104,23 @@ export const ModelManagementScreen: React.FC = () => {
                 <h2 className="text-3xl font-bold text-gray-900">Model Management</h2>
                 <Button variant="ghost" onClick={fetchModels} disabled={!!loadingModel}>Refresh</Button>
             </div>
-            <p className="text-gray-500 mb-8">Select a local AI model for generating your summaries. Models are optimized for Apple Silicon.</p>
+            <p className="text-gray-500 mb-8">Select an OpenAI model for generating your summaries. All models are cloud-hosted and always available.</p>
 
-            {!ollamaAvailable && (
+            {!apiKeyConfigured && (
                 <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
-                    <strong>Ollama CLI not found.</strong> Please install Ollama from <a href="https://ollama.com" target="_blank" className="underline">ollama.com</a> and ensure it's in your PATH.
+                    <strong>OpenAI API Key not configured.</strong> Please set the OPENAI_API_KEY environment variable.
                 </div>
             )}
 
-            {ollamaAvailable && !serverUp && (
+            {apiKeyConfigured && !serverUp && (
                 <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-xl text-yellow-700 text-sm">
-                    <strong>Ollama server is not running.</strong> Please start the Ollama application or run <code>ollama serve</code> in your terminal.
+                    <strong>Cannot reach OpenAI API.</strong> Please check your internet connection and API key.
+                </div>
+            )}
+
+            {apiKeyConfigured && serverUp && (
+                <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl text-green-700 text-sm">
+                    <strong>✓ OpenAI API Connected.</strong> All models are ready to use.
                 </div>
             )}
 
@@ -191,46 +136,30 @@ export const ModelManagementScreen: React.FC = () => {
                             </div>
                             <div className="flex items-center space-x-4">
                                 <p className="text-sm text-gray-500">{model.size}</p>
-                                <StatusIndicator status={model.status} />
+                                <div className="flex items-center space-x-2">
+                                    <span className={`h-2.5 w-2.5 rounded-full bg-green-500`}></span>
+                                    <span className="text-sm text-gray-500">Available</span>
+                                </div>
                             </div>
                         </div>
                         <div className="flex items-center space-x-3">
-                            {model.status === ModelStatus.NotDownloaded ? (
+                            {model.isActive ? (
+                                <span className="text-sm text-blue-600 font-semibold">Currently Selected</span>
+                            ) : (
                                 <Button 
                                     variant="primary" 
-                                    onClick={() => handlePull(model.name)} 
+                                    onClick={() => handleActivate(model.name)} 
                                     disabled={!!loadingModel}
                                     className="text-sm"
                                 >
-                                    {loadingModel === model.name ? 'Pulling...' : 'Download'}
+                                    {loadingModel === model.name ? 'Setting...' : 'Select'}
                                 </Button>
-                            ) : (
-                                <>
-                                    <Button 
-                                        variant="ghost" 
-                                        onClick={() => handleRemove(model.name)} 
-                                        disabled={!!loadingModel || model.isActive}
-                                        className="text-sm text-red-600 hover:bg-red-50"
-                                    >
-                                        {loadingModel === model.name ? '...' : 'Remove'}
-                                    </Button>
-                                    <Button 
-                                        variant={model.isActive ? 'secondary' : 'primary'} 
-                                        onClick={() => model.isActive ? handleDeactivate(model.name) : handleActivate(model.name)} 
-                                        disabled={!!loadingModel}
-                                        className={`text-sm min-w-[100px] ${model.isActive ? 'bg-white border-blue-200 text-blue-700 hover:bg-blue-50' : ''}`}
-                                    >
-                                        {loadingModel === model.name 
-                                            ? (model.isActive ? 'Stopping...' : 'Starting...') 
-                                            : (model.isActive ? 'Stop Model' : 'Activate')}
-                                    </Button>
-                                </>
                             )}
                         </div>
                     </div>
                 ))}
             </div>
-            <p className="text-center text-xs text-gray-500 mt-6">Note: Models up to 4B parameters supported for local performance.</p>
+            <p className="text-center text-xs text-gray-500 mt-6">Note: All OpenAI models are cloud-hosted and managed via API. No local installation required.</p>
         </div>
     );
 };

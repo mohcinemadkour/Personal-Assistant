@@ -29,6 +29,7 @@ export interface SummaryPreferences {
 export enum Screen {
   Home = 'Home',
   Dashboard = 'Dashboard',
+  Calendar = 'Calendar',
   ModelManagement = 'ModelManagement',
   Settings = 'Settings',
   About = 'About',
@@ -46,4 +47,15 @@ export interface Story {
   date_iso: string;
   sender_email: string;
   processed_at: string;
+}
+
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  description?: string;
+  startTime: string;
+  endTime: string;
+  organizer?: string;
+  attendees?: string[];
+  location?: string;
 }

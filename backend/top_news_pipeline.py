@@ -62,12 +62,9 @@ def resolve_secret_path(env_key, default_name):
 GOOGLE_CREDENTIALS = resolve_secret_path("GOOGLE_CREDENTIALS", "Google_credentials.json")
 GOOGLE_TOKEN = resolve_secret_path("GOOGLE_TOKEN", "token.json")
 FETCH_LIMIT = int(os.getenv("FETCH_LIMIT", 10))
-# Allow configuring the Ollama base URL (host:port) separately. If a full
-# OLLAMA_URL is provided in env, prefer that; otherwise construct the generate
-# endpoint from OLLAMA_BASE_URL so users can override just the host/port.
-OLLAMA_BASE_URL = os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434')
-OLLAMA_URL = os.getenv("OLLAMA_URL", f"{OLLAMA_BASE_URL.rstrip('/')}/api/generate")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3:8b")
+# OpenAI Configuration
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
 def resolve_db_path():
     val = os.getenv("DUCKDB_PATH")
@@ -291,40 +288,55 @@ def extract_json_block(s: Any) -> Any | None:
         except Exception: pass
     return None
 
-def call_ollama(prompt: str, model: str = OLLAMA_MODEL, format: str = None, retries: int = 2) -> Any:
-    payload = {"model": model, "prompt": prompt, "stream": False}
-    if format: payload["format"] = format
-    headers = {"Content-Type": "application/json"}
+def call_openai(prompt: str, model: str = None, format: str = None, retries: int = 2) -> Any:
+    if not OPENAI_API_KEY:
+        print("[error] OPENAI_API_KEY not set")
+        return None
+    
+    # Use provided model or get from environment
+    if not model:
+        model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    headers = {
+        "Authorization": f"Bearer {OPENAI_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    messages = [{"role": "user", "content": prompt}]
+    payload = {"model": model, "messages": messages, "temperature": 0.7}
     
     for attempt in range(retries + 1):
         try:
-            # Increased timeout to 300s
-            resp = requests.post(OLLAMA_URL, json=payload, headers=headers, timeout=300)
+            resp = requests.post(
+                "https://api.openai.com/v1/chat/completions",
+                json=payload,
+                headers=headers,
+                timeout=60
+            )
             resp.raise_for_status()
-            raw = resp.text or ""
-            parsed = extract_json_block(raw)
-            if isinstance(parsed, dict) and "response" in parsed:
-                inner = parsed.get("response")
-                if isinstance(inner, (dict, list)): return inner
-                if isinstance(inner, str):
-                    inner_parsed = extract_json_block(inner)
-                    return inner_parsed if inner_parsed is not None else inner
-            return parsed if parsed is not None else raw
+            data = resp.json()
+            
+            if "choices" in data and len(data["choices"]) > 0:
+                content = data["choices"][0]["message"]["content"]
+                if format == "json":
+                    parsed = extract_json_block(content)
+                    return parsed if parsed is not None else content
+                return content
+            return None
         except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
             if attempt < retries:
-                print(f"[warn] Ollama call timed out/failed, retrying ({attempt + 1}/{retries})...")
+                print(f"[warn] OpenAI call timed out/failed, retrying ({attempt + 1}/{retries})...")
                 continue
-            print(f"[error] Ollama call failed after {retries} retries: {e}")
+            print(f"[error] OpenAI call failed after {retries} retries: {e}")
             return None
         except Exception as e:
-            print(f"[error] Ollama call failed: {e}")
+            print(f"[error] OpenAI call failed: {e}")
             return None
     return None
 
 # --- Pipeline Logic ---
 def clean_newsletter(body: str) -> str:
     prompt = CLEAN_PROMPT.format(newsletter=body)
-    return str(call_ollama(prompt) or "").strip()
+    return str(call_openai(prompt) or "").strip()
 
 def extract_stories(cleaned_text: str) -> List[Dict[str, str]]:
     # Use chunking for extraction if text is long
@@ -332,7 +344,7 @@ def extract_stories(cleaned_text: str) -> List[Dict[str, str]]:
     all_stories = []
     for doc in docs:
         prompt = EXTRACT_PROMPT.format(cleaned=doc.page_content)
-        res = call_ollama(prompt, format="json")
+        res = call_openai(prompt, format="json")
         if isinstance(res, dict) and "stories" in res:
             all_stories.extend(res["stories"])
         elif isinstance(res, list):
@@ -341,7 +353,7 @@ def extract_stories(cleaned_text: str) -> List[Dict[str, str]]:
 
 def generate_social(title: str, summary: str) -> Dict[str, str]:
     prompt = SOCIAL_PROMPT.format(title=title, summary=summary)
-    res = call_ollama(prompt, format="json")
+    res = call_openai(prompt, format="json")
     if not isinstance(res, dict):
         return {"linkedIn": summary, "x_post": summary[:280], "branding_tag": "#AI", "action_suggestion": "Read more"}
     return {

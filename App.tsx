@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { HomeScreen } from './components/HomeScreen';
 import { DashboardScreen } from './components/DashboardScreen';
+import { CalendarScreen } from './components/CalendarScreen';
 import { ModelManagementScreen } from './components/ModelManagementScreen';
 import { SettingsScreen } from './components/SettingsScreen';
 import { AboutScreen } from './components/AboutScreen';
@@ -268,6 +269,8 @@ const App: React.FC = () => {
                             onExport={handleExport}
                             onSendWhatsApp={handleSendWhatsApp}
                         />;
+            case Screen.Calendar:
+                return <CalendarScreen onBack={() => setActiveScreen(Screen.Home)} />;
             case Screen.ModelManagement:
                 return <ModelManagementScreen />;
             case Screen.Settings:

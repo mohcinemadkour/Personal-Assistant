@@ -1,6 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
 import shutil
@@ -14,6 +15,16 @@ import subprocess
 import json as _json
 from whatsapp_service import whatsapp_service
 
+# Load environment variables from .env file
+from dotenv import load_dotenv
+BASE_DIR = os.path.dirname(__file__)
+SECRETS_DIR = os.path.join(BASE_DIR, "secrets")
+os.makedirs(SECRETS_DIR, exist_ok=True)
+ENV_PATH = os.path.join(SECRETS_DIR, '.env')
+load_dotenv(ENV_PATH)
+
+FRONTEND_DIST = os.path.join(os.path.dirname(BASE_DIR), "dist")
+
 # Import user's pipeline
 try:
     from top_news_pipeline import NewsPipeline
@@ -23,15 +34,9 @@ except Exception as e:
     NewsPipeline = None
     PIPELINE_AVAILABLE = False
 
-BASE_DIR = os.path.dirname(__file__)
-FRONTEND_DIST = os.path.join(os.path.dirname(BASE_DIR), "dist")
-SECRETS_DIR = os.path.join(BASE_DIR, "secrets")
-os.makedirs(SECRETS_DIR, exist_ok=True)
-
-# Allow overriding Ollama server/base URL via environment variable so we don't
-# hardcode localhost/port in multiple places. When not set, default to
-# localhost:11434 which is the Ollama local server default.
-OLLAMA_BASE_URL = os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434')
+# Allow overriding OpenAI API key via environment variable
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
 def resolve_secret_path(env_var: str, default_name: str) -> str:
     val = os.getenv(env_var)
@@ -50,6 +55,15 @@ def resolve_db_path():
     return os.path.join(BASE_DIR, val)
 
 app = FastAPI()
+
+# Add CORS middleware to allow requests from frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins for development
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.on_event("startup")
 async def startup_event():
@@ -145,7 +159,7 @@ async def get_config():
         "FETCH_LIMIT": os.getenv("FETCH_LIMIT", "10"),
         "TOP_N": os.getenv("TOP_N", "10"),
         "SIMILARITY_THRESHOLD": os.getenv("SIMILARITY_THRESHOLD", "0.85"),
-        "OLLAMA_MODEL": os.getenv("OLLAMA_MODEL", "qwen3:8b"),
+        "OPENAI_MODEL": os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
     }
     if os.path.exists(env_path):
         with open(env_path, 'r') as f:
@@ -212,58 +226,61 @@ def run_cmd(cmd: list, timeout: int = 600):
         return False, '', str(e), 1
 
 
-@app.get('/api/ollama/status')
-async def ollama_status():
-    # Check whether ollama CLI is available (cross-platform)
-    cli_available = shutil.which('ollama') is not None
+@app.get('/api/openai/status')
+async def openai_status():
+    # Check if OpenAI API key is configured
+    api_key = os.getenv('OPENAI_API_KEY')
+    api_available = bool(api_key)
     
-    # Check if ollama server is responding
+    # Check if we can reach OpenAI API
     server_up = False
+    running = False
     try:
         import requests
-        tags_url = OLLAMA_BASE_URL.rstrip('/') + '/api/tags'
-        r = requests.get(tags_url, timeout=2)
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        r = requests.get("https://api.openai.com/v1/models", headers=headers, timeout=5)
         server_up = r.status_code == 200
+        running = server_up  # If API is accessible, we're "running"
     except Exception:
         server_up = False
-
-    # check running models using 'ollama ps'
-    running_models = []
-    if cli_available and server_up:
-        ok2, ps_out, ps_err, _ = run_cmd(['ollama', 'ps'])
-        if ok2 and ps_out:
-            lines = ps_out.splitlines()
-            if len(lines) > 1: # Skip header
-                for line in lines[1:]:
-                    parts = line.split()
-                    if parts:
-                        running_models.append(parts[0])
+        running = False
     
     return {
         "ok": True, 
-        "cli_available": cli_available, 
-        "server_up": server_up,
-        "running": len(running_models) > 0, 
-        "running_models": running_models
+        "cli_available": api_available,  # API key configured
+        "server_up": server_up,  # Can reach OpenAI API
+        "running": running,  # Ready to use
+        "running_models": [os.getenv("OPENAI_MODEL", "gpt-4o-mini")] if running else []
     }
+    
+# Keep legacy /api/ollama/status for backward compatibility
+@app.get('/api/ollama/status')
+async def ollama_status():
+    return await openai_status()
 
 
 @app.get('/api/models')
 async def list_models():
-    # Use 'ollama list' to get all downloaded models
-    ok, out, err, code = run_cmd(['ollama', 'list'])
-    if ok and code == 0:
-        lines = out.splitlines()
-        models = []
-        if len(lines) > 1: # Skip header
-            for l in lines[1:]:
-                parts = l.split()
-                if len(parts) >= 3:
-                    name = parts[0]
-                    size = parts[2]
-                    models.append({"name": name, "size": size})
-        return {"ok": True, "models": models, "raw": out}
-    return {"ok": False, "models": [], "error": "ollama list failed"}
+    # OpenAI models - return the configured model and some common alternatives
+    api_key = os.getenv('OPENAI_API_KEY')
+    configured_model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    
+    available_models = [
+        {"name": "gpt-4o", "size": "Large (Latest)"},
+        {"name": "gpt-4o-mini", "size": "Small (Fast)"},
+        {"name": "gpt-4-turbo", "size": "Large (Turbo)"},
+        {"name": "gpt-3.5-turbo", "size": "Small (Legacy)"},
+    ]
+    
+    # Mark the configured one as "active"
+    for m in available_models:
+        if m["name"] == configured_model:
+            m["active"] = True
+    
+    return {"ok": True, "models": available_models, "configured": configured_model, "api_key_set": bool(api_key)}
 
 
 @app.post('/api/models/pull')
@@ -271,10 +288,8 @@ async def pull_model(payload: dict):
     model = payload.get('model')
     if not model:
         return {"ok": False, "error": "no model specified"}
-    # Pulling can take a long time, but we'll wait for it here for simplicity
-    # In a real app, this should be a background task with progress updates
-    ok, out, err, code = run_cmd(['ollama', 'pull', model], timeout=3600)
-    return {"ok": ok and code == 0, "out": out, "err": err, "code": code}
+    # OpenAI models don't need to be "pulled" - they're already available via API
+    return {"ok": True, "message": f"Model {model} is available via OpenAI API"}
 
 
 @app.post('/api/models/remove')
@@ -282,22 +297,39 @@ async def remove_model(payload: dict):
     model = payload.get('model')
     if not model:
         return {"ok": False, "error": "no model specified"}
-    ok, out, err, code = run_cmd(['ollama', 'rm', model])
-    return {"ok": ok and code == 0, "out": out, "err": err, "code": code}
+    # OpenAI models can't be removed - they live on OpenAI's servers
+    return {"ok": False, "error": "Cannot remove OpenAI API models. Configured via OPENAI_MODEL env variable."}
 
 
 @app.post('/api/models/activate')
 async def activate_model(payload: dict):
+    global OPENAI_MODEL
     model = payload.get('model')
     if not model:
         return {"ok": False, "error": "no model specified"}
     
-    # 'ollama run' starts the model. We'll run it with '/bye' to just ensure it's loaded 
-    # into memory and then exit the CLI.
-    ok, out, err, code = run_cmd(['ollama', 'run', model, '/bye'], timeout=60)
-    if ok and code == 0:
-        return {"ok": True, "message": f"Model {model} activated"}
-    return {"ok": False, "error": err or "Failed to activate model"}
+    # For OpenAI, "activating" means setting it as the configured model
+    env_path = os.path.join(SECRETS_DIR, '.env')
+    existing = {}
+    if os.path.exists(env_path):
+        with open(env_path, 'r') as f:
+            for line in f:
+                if '=' in line and not line.startswith('#'):
+                    k, v = line.strip().split('=', 1)
+                    existing[k] = v
+    
+    existing['OPENAI_MODEL'] = model
+    
+    with open(env_path, 'w') as f:
+        for k, v in existing.items():
+            f.write(f"{k}={v}\n")
+    
+    # Reload environment variables for the current process
+    from dotenv import load_dotenv
+    load_dotenv(env_path, override=True)
+    OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    
+    return {"ok": True, "message": f"Model {model} is now configured"}
 
 
 @app.post('/api/models/deactivate')
@@ -306,9 +338,8 @@ async def deactivate_model(payload: dict):
     if not model:
         return {"ok": False, "error": "no model specified"}
     
-    ok, out, err, code = run_cmd(['ollama', 'stop', model])
-    if ok and code == 0:
-        return {"ok": True, "message": f"Model {model} stopped"}
+    # OpenAI models can't be deactivated - we always need a model configured
+    return {"ok": False, "error": "Cannot deactivate OpenAI models. A model must always be configured."}
     return {"ok": False, "error": err or "Failed to stop model"}
 
 
@@ -551,6 +582,141 @@ async def ai_helper(payload: dict):
         return {"ok": True, "response": res}
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+@app.get('/api/calendar/events')
+async def get_calendar_events():
+    """Fetch upcoming calendar events from Google Calendar."""
+    try:
+        from google.auth.transport.requests import Request
+        from google.oauth2.credentials import Credentials
+        from google_auth_oauthlib.flow import InstalledAppFlow
+        import googleapiclient.discovery
+        from datetime import datetime, timedelta
+        
+        SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
+        
+        # Try to load credentials
+        token_path = resolve_secret_path("GOOGLE_TOKEN", "token.json")
+        credentials_path = resolve_secret_path("GOOGLE_CREDENTIALS", "Google_credentials.json")
+        
+        creds = None
+        
+        # Try to use OAuth token first (preferred for Calendar access)
+        if os.path.exists(token_path):
+            try:
+                creds = Credentials.from_authorized_user_file(token_path, SCOPES)
+                # Check if token is valid, refresh if expired
+                if creds and creds.expired and creds.refresh_token:
+                    creds.refresh(Request())
+                    # Save refreshed token
+                    with open(token_path, 'w') as f:
+                        f.write(creds.to_json())
+            except Exception as e:
+                print(f"[warn] Could not use OAuth token: {e}")
+                creds = None
+        
+        # Fallback to service account credentials
+        if creds is None and os.path.exists(credentials_path):
+            try:
+                from google.oauth2.service_account import Credentials as ServiceAccountCredentials
+                creds = ServiceAccountCredentials.from_service_account_file(
+                    credentials_path,
+                    scopes=SCOPES
+                )
+            except Exception as e:
+                print(f"[warn] Could not use service account credentials: {e}")
+                creds = None
+        
+        # If no credentials found, try OAuth flow
+        if creds is None and os.path.exists(credentials_path):
+            try:
+                from google_auth_oauthlib.flow import InstalledAppFlow
+                flow = InstalledAppFlow.from_client_secrets_file(
+                    credentials_path, 
+                    SCOPES
+                )
+                # This will open a browser for user authentication
+                creds = flow.run_local_server(port=0)
+                # Save the token for future use
+                with open(token_path, 'w') as f:
+                    f.write(creds.to_json())
+            except Exception as e:
+                print(f"[warn] OAuth flow failed: {e}")
+                creds = None
+        
+        if creds is None:
+            return JSONResponse({"ok": False, "error": "Google credentials not configured"}, status_code=401)
+        
+        # Build Calendar service
+        service = googleapiclient.discovery.build('calendar', 'v3', credentials=creds)
+        
+        # Get calendar events for the next 30 days
+        now = datetime.utcnow().isoformat() + 'Z'
+        thirty_days_later = (datetime.utcnow() + timedelta(days=30)).isoformat() + 'Z'
+        
+        events_result = service.events().list(
+            calendarId='primary',
+            timeMin=now,
+            timeMax=thirty_days_later,
+            maxResults=50,
+            singleEvents=True,
+            orderBy='startTime'
+        ).execute()
+        
+        events = events_result.get('items', [])
+        
+        # Transform Google Calendar events to our format
+        formatted_events = []
+        for event in events:
+            event_id = event.get('id', '')
+            title = event.get('summary', 'Untitled Event')
+            description = event.get('description', '')
+            
+            # Handle both dateTime (with time) and date (all-day events)
+            start_info = event.get('start', {})
+            end_info = event.get('end', {})
+            
+            if 'dateTime' in start_info:
+                start_time = start_info['dateTime']
+            elif 'date' in start_info:
+                start_time = start_info['date'] + 'T00:00:00Z'
+            else:
+                start_time = now
+            
+            if 'dateTime' in end_info:
+                end_time = end_info['dateTime']
+            elif 'date' in end_info:
+                end_time = end_info['date'] + 'T23:59:59Z'
+            else:
+                end_time = start_time
+            
+            organizer = event.get('organizer', {}).get('displayName', '')
+            location = event.get('location', '')
+            
+            # Extract attendees
+            attendees = []
+            for attendee in event.get('attendees', []):
+                display_name = attendee.get('displayName') or attendee.get('email', '')
+                attendees.append(display_name)
+            
+            formatted_events.append({
+                'id': event_id,
+                'title': title,
+                'description': description,
+                'startTime': start_time,
+                'endTime': end_time,
+                'organizer': organizer,
+                'location': location,
+                'attendees': attendees
+            })
+        
+        return {"ok": True, "events": formatted_events}
+    
+    except ImportError as e:
+        return JSONResponse({"ok": False, "error": f"Missing required library: {str(e)}"}, status_code=500)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": f"Failed to fetch calendar events: {str(e)}"}, status_code=500)
 
 
 if __name__ == '__main__':

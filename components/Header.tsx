@@ -48,6 +48,7 @@ export const Header: React.FC<HeaderProps> = ({ activeScreen, setScreen, isOnlin
   const screens: { screen: Screen; label: string }[] = [
       { screen: Screen.Home, label: 'Home' },
       { screen: Screen.Dashboard, label: 'Dashboard' },
+      { screen: Screen.Calendar, label: 'Calendar' },
       { screen: Screen.ModelManagement, label: 'Models' },
       { screen: Screen.Settings, label: 'Settings' },
       { screen: Screen.About, label: 'About' },
