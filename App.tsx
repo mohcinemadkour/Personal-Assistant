@@ -201,11 +201,27 @@ const App: React.FC = () => {
                 if (!resp.ok) throw new Error(data?.error || JSON.stringify(data));
                 alert('Credentials uploaded successfully. The app will use them when you run the pipeline.');
                 setIsGmailConnected(true);
+                // Refresh secrets status in Settings
+                await handleRefreshSecrets();
             } catch (err) {
                 alert('Failed to upload credentials: ' + (err as Error).message);
             }
         };
         input.click();
+    };
+
+    const handleRefreshSecrets = async () => {
+        try {
+            const resp = await fetch('/api/secrets/status');
+            if (resp.ok) {
+                const data = await resp.json();
+                if (data.secrets?.google_credentials?.exists) {
+                    setIsGmailConnected(true);
+                }
+            }
+        } catch (e) {
+            console.error('Failed to refresh secrets status:', e);
+        }
     };
 
     const handleUploadToken = async () => {
@@ -223,6 +239,8 @@ const App: React.FC = () => {
                 if (!resp.ok) throw new Error(data?.error || JSON.stringify(data));
                 alert('Token uploaded successfully.');
                 setIsGmailConnected(true);
+                // Refresh secrets status in Settings
+                await handleRefreshSecrets();
             } catch (err) {
                 alert('Failed to upload token: ' + (err as Error).message);
             }
@@ -238,6 +256,8 @@ const App: React.FC = () => {
             if (!resp.ok) throw new Error(data?.error || JSON.stringify(data));
             alert('Credentials deleted: ' + (data.removed || []).join(', '));
             setIsGmailConnected(false);
+            // Refresh secrets status in Settings
+            await handleRefreshSecrets();
         } catch (err) {
             alert('Failed to delete credentials: ' + (err as Error).message);
         }
@@ -316,6 +336,7 @@ const App: React.FC = () => {
                                                         onSaveNewsletters={handleSaveNewsletters}
                                                         priorityKeywords={priorityKeywords}
                                                         onSavePriorityKeywords={handleSavePriorityKeywords}
+                                                        onRefreshSecrets={handleRefreshSecrets}
                     />
                 );
             case Screen.About:

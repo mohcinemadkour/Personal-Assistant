@@ -16,6 +16,7 @@ interface SettingsScreenProps {
   onDeleteCredentials?: () => void;
   priorityKeywords?: string[];
   onSavePriorityKeywords?: (keywords: string[]) => void;
+  onRefreshSecrets?: () => void;
 }
 
 const NewsletterManager: React.FC<{
@@ -120,7 +121,7 @@ const NewsletterManager: React.FC<{
     );
 };
 
-export const SettingsScreen: React.FC<SettingsScreenProps> = ({ initialPrefs, onSavePrefs, isGmailConnected, onConnect, onDisconnect, selectedNewsletters, onSaveNewsletters, onUploadToken, onDeleteCredentials, priorityKeywords, onSavePriorityKeywords }) => {
+export const SettingsScreen: React.FC<SettingsScreenProps> = ({ initialPrefs, onSavePrefs, isGmailConnected, onConnect, onDisconnect, selectedNewsletters, onSaveNewsletters, onUploadToken, onDeleteCredentials, priorityKeywords, onSavePriorityKeywords, onRefreshSecrets }) => {
   const [prefs, setPrefs] = useState<SummaryPreferences>(initialPrefs);
   const [secretsStatus, setSecretsStatus] = useState<null | Record<string, { exists: boolean; path: string }>>(null);
   const [keywords, setKeywords] = useState<string[]>(priorityKeywords || []);
@@ -145,13 +146,26 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ initialPrefs, on
   };
 
   const fetchSecretsStatus = async () => {
-    // ... existing code ...
+    try {
+      const resp = await fetch('/api/secrets/status');
+      if (resp.ok) {
+        const data = await resp.json();
+        setSecretsStatus(data.secrets || {});
+      }
+    } catch (e) {
+      console.error('Failed to fetch secrets status:', e);
+    }
   };
 
   useEffect(() => {
     fetchSecretsStatus();
     fetchConfig();
   }, []);
+
+  // Refetch secrets status when isGmailConnected changes or when onRefreshSecrets is called
+  useEffect(() => {
+    fetchSecretsStatus();
+  }, [isGmailConnected]);
 
   const handleSaveConfig = async () => {
     try {
