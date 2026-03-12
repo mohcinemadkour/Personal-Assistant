@@ -51,36 +51,37 @@ export const TravelScreen: React.FC = () => {
   const filterTravelEvents = (events: CalendarEvent[]): TravelEvent[] => {
     return events
       .filter((event) => {
-        // Check if event has location (strong indicator of travel)
-        if (event.location) {
+        // Calculate duration
+        const start = new Date(event.startTime);
+        const end = new Date(event.endTime);
+        const durationDays = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
+        
+        // Require location AND multi-day stay (hotel booking indicator)
+        // Must have a destination AND require overnight accommodation
+        if (event.location && durationDays >= 1) {
           return true;
         }
         
-        // Check if title contains travel-related keywords
+        // Alternative: strong travel keywords + multi-day stay
         const travelKeywords = [
-          'travel', 'trip', 'conference', 'summit', 'convention',
-          'workshop', 'retreat', 'meetup', 'flight', 'hotel',
-          'road trip', 'vacation', 'business trip', 'mission',
-          'trade show', 'expo', 'forum', 'symposium'
+          'flight', 'hotel', 'conference', 'summit', 'convention',
+          'workshop', 'retreat', 'business trip', 'trade show',
+          'expo', 'symposium', 'road trip'
         ];
         
         const titleLower = event.title.toLowerCase();
         const descLower = (event.description || '').toLowerCase();
         
-        const hasKeyword = travelKeywords.some(
+        const hasStrongKeyword = travelKeywords.some(
           keyword => titleLower.includes(keyword) || descLower.includes(keyword)
         );
         
-        if (hasKeyword) {
+        // Include strong keywords if multi-day
+        if (hasStrongKeyword && durationDays >= 1) {
           return true;
         }
         
-        // Check if event spans multiple days
-        const start = new Date(event.startTime);
-        const end = new Date(event.endTime);
-        const durationDays = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
-        
-        return durationDays >= 1;
+        return false;
       })
       .map((event) => {
         const start = new Date(event.startTime);
@@ -90,7 +91,7 @@ export const TravelScreen: React.FC = () => {
         return {
           ...event,
           duration: Math.max(1, duration),
-          isTravelEvent: !!event.location || duration > 1
+          isTravelEvent: !!event.location && duration >= 1
         };
       })
       .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
