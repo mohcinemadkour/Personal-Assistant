@@ -56,17 +56,17 @@ export const TravelScreen: React.FC = () => {
         const end = new Date(event.endTime);
         const durationDays = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
         
-        // Require location AND multi-day stay (hotel booking indicator)
-        // Must have a destination AND require overnight accommodation
-        if (event.location && durationDays >= 1) {
+        // Primary filter: Any event with a location field = travel required
+        // This includes conferences, meetings, events in other cities
+        if (event.location && event.location.trim() !== '') {
           return true;
         }
         
-        // Alternative: strong travel keywords + multi-day stay
+        // Alternative: strong travel keywords (even without explicit location)
         const travelKeywords = [
           'flight', 'hotel', 'conference', 'summit', 'convention',
           'workshop', 'retreat', 'business trip', 'trade show',
-          'expo', 'symposium', 'road trip'
+          'expo', 'symposium', 'road trip', 'trip'
         ];
         
         const titleLower = event.title.toLowerCase();
