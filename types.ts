@@ -24,6 +24,7 @@ export interface SummaryPreferences {
   frequency: 'Daily' | 'Weekly';
   time: string;
   notifications: boolean;
+  homeLocation?: string;
 }
 
 export enum Screen {

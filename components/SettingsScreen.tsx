@@ -403,6 +403,21 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ initialPrefs, on
             />
             <p className="text-xs text-gray-500 mt-2">Enable notifications to get alerts when your summary is ready.</p>
           </div>
+
+          <div className="border-t border-gray-200 pt-6">
+            <label htmlFor="homeLocation" className="block text-sm font-medium text-gray-600 mb-2">
+              Home Location (for Travel Tab)
+            </label>
+            <input
+              type="text"
+              id="homeLocation"
+              placeholder="e.g., Dallas, TX"
+              value={prefs.homeLocation || ''}
+              onChange={e => setPrefs(p => ({ ...p, homeLocation: e.target.value }))}
+              className="w-full bg-white border border-gray-300 rounded-md px-3 py-2 text-gray-800 focus:ring-blue-500 focus:border-blue-500"
+            />
+            <p className="text-xs text-gray-500 mt-2">Enter your home city to filter events that require traveling over 100 miles.</p>
+          </div>
         </div>
         
         <div className="mt-8 text-right">

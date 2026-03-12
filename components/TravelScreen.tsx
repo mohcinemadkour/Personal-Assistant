@@ -5,6 +5,51 @@ import { Button } from './Button';
 interface TravelEvent extends CalendarEvent {
   duration: number; // in days
   isTravelEvent: boolean;
+  distance?: number; // in miles
+}
+
+// Approximate coordinates for major US cities (latitude, longitude)
+const CITY_COORDINATES: Record<string, { lat: number; lon: number }> = {
+  'dallas': { lat: 32.7767, lon: -96.7970 },
+  'houston': { lat: 29.7604, lon: -95.3698 },
+  'austin': { lat: 30.2672, lon: -97.7431 },
+  'san antonio': { lat: 29.4241, lon: -98.4936 },
+  'fort worth': { lat: 32.7555, lon: -97.3308 },
+  'atlanta': { lat: 33.7490, lon: -84.3880 },
+  'chicago': { lat: 41.8781, lon: -87.6298 },
+  'new york': { lat: 40.7128, lon: -74.0060 },
+  'los angeles': { lat: 34.0522, lon: -118.2437 },
+  'san francisco': { lat: 37.7749, lon: -122.4194 },
+  'denver': { lat: 39.7392, lon: -104.9903 },
+  'boston': { lat: 42.3601, lon: -71.0589 },
+  'washington': { lat: 38.9072, lon: -77.0369 },
+  'london': { lat: 51.5074, lon: -0.1278 },
+  'toronto': { lat: 43.6532, lon: -79.3832 },
+  'mexico city': { lat: 19.4326, lon: -99.1332 },
+};
+
+// Haversine formula to calculate distance between two coordinates
+function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 3959; // Earth's radius in miles
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+// Extract city from location string
+function extractCity(location: string): string | null {
+  if (!location) return null;
+  // Try to extract city from format like "City Name, State" or "City Name"
+  const parts = location.split(',');
+  const city = parts[0].trim().toLowerCase();
+  return city;
 }
 
 export const TravelScreen: React.FC = () => {
@@ -12,8 +57,21 @@ export const TravelScreen: React.FC = () => {
   const [allEvents, setAllEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [homeLocation, setHomeLocation] = useState<string | null>(null);
 
   useEffect(() => {
+    // Retrieve home location from localStorage (preferences)
+    try {
+      const prefsStr = localStorage.getItem('preferences');
+      if (prefsStr) {
+        const prefs = JSON.parse(prefsStr);
+        if (prefs.homeLocation) {
+          setHomeLocation(prefs.homeLocation);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load preferences:', e);
+    }
     fetchTravelEvents();
   }, []);
 
@@ -38,7 +96,7 @@ export const TravelScreen: React.FC = () => {
       setAllEvents(events);
       
       // Filter for travel-related events
-      const filtered = filterTravelEvents(events);
+      const filtered = filterTravelEvents(events, homeLocation);
       setTravelEvents(filtered);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch travel events');
@@ -48,50 +106,60 @@ export const TravelScreen: React.FC = () => {
     }
   };
 
-  const filterTravelEvents = (events: CalendarEvent[]): TravelEvent[] => {
+  const filterTravelEvents = (events: CalendarEvent[], home: string | null): TravelEvent[] => {
     return events
       .filter((event) => {
-        // Calculate duration
-        const start = new Date(event.startTime);
-        const end = new Date(event.endTime);
-        const durationDays = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
-        
-        // Primary filter: Any event with a location field = travel required
-        // This includes conferences, meetings, events in other cities
-        if (event.location && event.location.trim() !== '') {
-          return true;
+        // Must have a location
+        if (!event.location || event.location.trim() === '') {
+          return false;
         }
         
-        // Alternative: strong travel keywords (even without explicit location)
-        const travelKeywords = [
-          'flight', 'hotel', 'conference', 'summit', 'convention',
-          'workshop', 'retreat', 'business trip', 'trade show',
-          'expo', 'symposium', 'road trip', 'trip'
-        ];
-        
-        const titleLower = event.title.toLowerCase();
-        const descLower = (event.description || '').toLowerCase();
-        
-        const hasStrongKeyword = travelKeywords.some(
-          keyword => titleLower.includes(keyword) || descLower.includes(keyword)
-        );
-        
-        // Include strong keywords if multi-day
-        if (hasStrongKeyword && durationDays >= 1) {
-          return true;
+        // If we have a home location, calculate distance
+        if (home) {
+          const homeCity = extractCity(home);
+          const eventCity = extractCity(event.location);
+          
+          if (homeCity && eventCity) {
+            const homeCoords = CITY_COORDINATES[homeCity];
+            const eventCoords = CITY_COORDINATES[eventCity];
+            
+            // If we have coordinates for both cities, calculate distance
+            if (homeCoords && eventCoords) {
+              const distance = calculateDistance(homeCoords.lat, homeCoords.lon, eventCoords.lat, eventCoords.lon);
+              // Only show events 100+ miles away
+              if (distance < 100) {
+                return false;
+              }
+            }
+          }
         }
         
-        return false;
+        return true;
       })
       .map((event) => {
         const start = new Date(event.startTime);
         const end = new Date(event.endTime);
         const duration = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
         
+        // Calculate distance if home location is set
+        let distance: number | undefined;
+        if (home) {
+          const homeCity = extractCity(home);
+          const eventCity = extractCity(event.location);
+          if (homeCity && eventCity) {
+            const homeCoords = CITY_COORDINATES[homeCity];
+            const eventCoords = CITY_COORDINATES[eventCity];
+            if (homeCoords && eventCoords) {
+              distance = Math.round(calculateDistance(homeCoords.lat, homeCoords.lon, eventCoords.lat, eventCoords.lon));
+            }
+          }
+        }
+        
         return {
           ...event,
           duration: Math.max(1, duration),
-          isTravelEvent: !!event.location && duration >= 1
+          isTravelEvent: !!event.location,
+          distance
         };
       })
       .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
@@ -145,10 +213,18 @@ export const TravelScreen: React.FC = () => {
                 <li>Go to <strong>Settings</strong> tab</li>
                 <li>Click <strong>Connect Gmail</strong> or <strong>Upload Google Credentials</strong></li>
                 <li>Select your Google credentials JSON file (with Calendar API enabled)</li>
+                <li>Set your <strong>Home Location</strong> in Summary Preferences</li>
                 <li>Return to Travel tab and click <strong>Refresh</strong></li>
               </ol>
             </div>
           )}
+        </div>
+      )}
+
+      {!error && !loading && !homeLocation && (
+        <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
+          <p className="font-semibold">⚠️ Home Location Not Set</p>
+          <p className="mt-2">To filter events by distance (100+ miles), please set your home location in <strong>Settings → Summary Preferences → Home Location</strong>.</p>
         </div>
       )}
 
@@ -212,6 +288,9 @@ export const TravelScreen: React.FC = () => {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                           </svg>
                           <span className="font-medium text-gray-700">{event.location}</span>
+                          {event.distance && (
+                            <span className="text-amber-600 font-semibold ml-2">({event.distance} mi)</span>
+                          )}
                         </div>
                       )}
                       

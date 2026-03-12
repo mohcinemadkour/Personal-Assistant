@@ -42,8 +42,28 @@ const App: React.FC = () => {
         };
     }, []);
 
-    // Load newsletters and priority keywords from backend on mount
+    // Load and save preferences to localStorage
     useEffect(() => {
+        // Load from localStorage on mount
+        try {
+            const saved = localStorage.getItem('preferences');
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                setPreferences(prev => ({ ...prev, ...parsed }));
+            }
+        } catch (e) {
+            console.error('Failed to load preferences from localStorage:', e);
+        }
+    }, []);
+
+    // Save preferences to localStorage whenever they change
+    useEffect(() => {
+        try {
+            localStorage.setItem('preferences', JSON.stringify(preferences));
+        } catch (e) {
+            console.error('Failed to save preferences to localStorage:', e);
+        }
+    }, [preferences]);
         const loadLists = async () => {
             try {
                 const [nlResp, kwResp, secResp, storiesResp, ollamaResp] = await Promise.all([
