@@ -64,6 +64,9 @@ const App: React.FC = () => {
             console.error('Failed to save preferences to localStorage:', e);
         }
     }, [preferences]);
+
+    // Load newsletters and priority keywords from backend on mount
+    useEffect(() => {
         const loadLists = async () => {
             try {
                 const [nlResp, kwResp, secResp, storiesResp, ollamaResp] = await Promise.all([
