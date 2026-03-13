@@ -8,6 +8,24 @@ interface TravelEvent extends CalendarEvent {
   distance?: number; // in miles
 }
 
+interface Hotel {
+  name: string;
+  city: string;
+  country: string;
+  price_per_night: number;
+  rating: number;
+  bedrooms: number;
+  url: string;
+  map_url: string;
+}
+
+interface HotelSuggestions {
+  eventId: string;
+  hotels: Hotel[];
+  loading: boolean;
+  error?: string;
+}
+
 // Approximate coordinates for major US cities (latitude, longitude)
 const CITY_COORDINATES: Record<string, { lat: number; lon: number }> = {
   'dallas': { lat: 32.7767, lon: -96.7970 },
@@ -80,6 +98,8 @@ export const TravelScreen: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [homeLocation, setHomeLocation] = useState<string | null>(null);
+  const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
+  const [hotelSuggestions, setHotelSuggestions] = useState<Map<string, HotelSuggestions>>(new Map());
 
   useEffect(() => {
     // Retrieve home location from localStorage (preferences)
@@ -228,6 +248,60 @@ export const TravelScreen: React.FC = () => {
     return 'Trip';
   };
 
+  const fetchHotelSuggestions = async (event: TravelEvent) => {
+    const eventId = event.id;
+    
+    // If already fetched, don't fetch again
+    if (hotelSuggestions.has(eventId)) {
+      return;
+    }
+    
+    // Set loading state
+    setHotelSuggestions(prev => new Map(prev).set(eventId, {
+      eventId,
+      hotels: [],
+      loading: true,
+    }));
+    
+    try {
+      // Extract city from location
+      const eventCity = extractCity(event.location);
+      if (!eventCity) {
+        throw new Error('Could not extract city from location');
+      }
+      
+      // Format dates for API
+      const startDate = event.startTime.split('T')[0];
+      const endDate = event.endTime.split('T')[0];
+      
+      // Get hotel suggestions
+      const response = await fetch(
+        `/api/hotel-suggestions?destination=${encodeURIComponent(eventCity)}&start_date=${startDate}&end_date=${endDate}&bedrooms=1&max_price=300&min_rating=3.5`
+      );
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch hotel suggestions');
+      }
+      
+      const data = await response.json();
+      const hotels = data.hotels || [];
+      
+      setHotelSuggestions(prev => new Map(prev).set(eventId, {
+        eventId,
+        hotels,
+        loading: false,
+      }));
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to get hotel suggestions';
+      setHotelSuggestions(prev => new Map(prev).set(eventId, {
+        eventId,
+        hotels: [],
+        loading: false,
+        error: errorMsg,
+      }));
+    }
+  };
+
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-4xl mx-auto">
       <div className="flex justify-between items-center mb-6">
@@ -356,6 +430,98 @@ export const TravelScreen: React.FC = () => {
                         </div>
                       </div>
                     )}
+
+                    {/* Hotel Suggestions */}
+                    <div className="mt-4 pt-4 border-t border-gray-100">
+                      <button
+                        onClick={() => {
+                          if (expandedEventId === event.id) {
+                            setExpandedEventId(null);
+                          } else {
+                            setExpandedEventId(event.id);
+                            fetchHotelSuggestions(event);
+                          }
+                        }}
+                        className="inline-flex items-center gap-2 text-sm font-semibold text-amber-600 hover:text-amber-700 transition-colors"
+                      >
+                        <svg className={`h-4 w-4 transition-transform ${expandedEventId === event.id ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                        </svg>
+                        Find Hotels
+                      </button>
+
+                      {expandedEventId === event.id && (
+                        <div className="mt-4">
+                          {hotelSuggestions.get(event.id)?.loading ? (
+                            <div className="text-center py-4">
+                              <div className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-gray-300 border-t-amber-600"></div>
+                              <p className="text-sm text-gray-600 mt-2">Finding hotels...</p>
+                            </div>
+                          ) : hotelSuggestions.get(event.id)?.error ? (
+                            <div className="text-center py-4">
+                              <p className="text-sm text-red-600">{hotelSuggestions.get(event.id)?.error}</p>
+                            </div>
+                          ) : (
+                            <div className="space-y-3">
+                              {hotelSuggestions.get(event.id)?.hotels && hotelSuggestions.get(event.id)!.hotels.length > 0 ? (
+                                hotelSuggestions.get(event.id)!.hotels.map((hotel, idx) => (
+                                  <div key={idx} className="bg-gradient-to-r from-amber-50 to-orange-50 p-4 rounded-lg border border-amber-200">
+                                    <div className="flex justify-between items-start mb-2">
+                                      <h5 className="font-bold text-gray-900">{hotel.name}</h5>
+                                      <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-1">
+                                          <svg className="h-4 w-4 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+                                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                          </svg>
+                                          <span className="text-sm font-semibold text-gray-700">{hotel.rating.toFixed(1)}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <p className="text-sm text-gray-600 mb-2">{hotel.city}{hotel.country ? `, ${hotel.country}` : ''}</p>
+                                    <div className="flex justify-between items-center">
+                                      <div>
+                                        <p className="text-lg font-bold text-amber-700">${hotel.price_per_night.toFixed(0)}</p>
+                                        <p className="text-xs text-gray-600">per night</p>
+                                      </div>
+                                      <div className="flex gap-2">
+                                        {hotel.url && (
+                                          <a
+                                            href={hotel.url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-1 px-3 py-1 bg-amber-600 text-white text-xs font-semibold rounded hover:bg-amber-700 transition-colors"
+                                          >
+                                            Book
+                                            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4m-4-4l-8-8m0 0h8m-8 8v8" />
+                                            </svg>
+                                          </a>
+                                        )}
+                                        {hotel.map_url && (
+                                          <a
+                                            href={hotel.map_url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-1 px-3 py-1 bg-gray-300 text-gray-800 text-xs font-semibold rounded hover:bg-gray-400 transition-colors"
+                                          >
+                                            Map
+                                            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4m-4-4l-8-8m0 0h8m-8 8v8" />
+                                            </svg>
+                                          </a>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))
+                              ) : (
+                                <p className="text-sm text-gray-600 text-center py-4">No hotels found for this destination</p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

@@ -726,6 +726,59 @@ async def get_calendar_events(days: int = 30):
         return JSONResponse({"ok": False, "error": f"Failed to fetch calendar events: {str(e)}"}, status_code=500)
 
 
+@app.get('/api/hotel-suggestions')
+async def get_hotel_suggestions(
+    destination: str,
+    start_date: str,
+    end_date: str,
+    bedrooms: int = 1,
+    max_price: float = 200.0,
+    min_rating: float = 4.0,
+):
+    """
+    Get hotel suggestions for a travel destination and date range.
+    
+    Args:
+        destination: Destination city name (e.g., "New York")
+        start_date: Check-in date in YYYY-MM-DD format
+        end_date: Check-out date in YYYY-MM-DD format
+        bedrooms: Number of bedrooms (default: 1)
+        max_price: Maximum price per night in USD (default: 200)
+        min_rating: Minimum hotel rating (default: 4.0)
+    
+    Returns:
+        List of hotel recommendations with pricing and booking links
+    """
+    try:
+        from hotel_service import get_hotel_suggestions as search_hotels
+        
+        # Validate input
+        if not destination or not start_date or not end_date:
+            return JSONResponse(
+                {"ok": False, "error": "Missing required parameters: destination, start_date, end_date"},
+                status_code=400
+            )
+        
+        # Get hotel suggestions
+        hotels = search_hotels(
+            destination=destination,
+            start_date=start_date,
+            end_date=end_date,
+            bedrooms=bedrooms,
+            max_price_per_night=max_price,
+            min_rating=min_rating,
+        )
+        
+        return {"ok": True, "hotels": hotels}
+    
+    except Exception as e:
+        print(f"[error] Hotel suggestions failed: {e}")
+        return JSONResponse(
+            {"ok": False, "error": str(e)},
+            status_code=500
+        )
+
+
 if __name__ == '__main__':
     import uvicorn
     uvicorn.run('main:app', host='0.0.0.0', port=4000, reload=True)
