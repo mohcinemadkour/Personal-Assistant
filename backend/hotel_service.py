@@ -1,15 +1,7 @@
-"""Hotel suggestion service using Travel-Agentic-AI workflow."""
+"""Hotel suggestion service using local Travel Agent workflow."""
 
-import sys
 import os
-from pathlib import Path
 from typing import Optional, List, Dict, Any
-
-# Add Travel-Agentic-AI to path
-TRAVEL_AI_PATH = Path("C:/Users/mohci/ProjectCode/Travel-Agentic-AI")
-if TRAVEL_AI_PATH.exists():
-    sys.path.insert(0, str(TRAVEL_AI_PATH))
-    print(f"[info] Added Travel-Agentic-AI to path: {TRAVEL_AI_PATH}")
 
 
 def get_hotel_suggestions(
@@ -22,7 +14,7 @@ def get_hotel_suggestions(
     origin: str = "US",
 ) -> List[Dict[str, Any]]:
     """
-    Get hotel suggestions using Travel-Agentic-AI workflow.
+    Get hotel suggestions using local Travel Agent workflow.
     
     Args:
         destination: Destination city/location
@@ -37,14 +29,9 @@ def get_hotel_suggestions(
         List of hotel recommendations with name, rating, price, url, map_url
     """
     try:
-        # Try to import Travel-Agentic-AI components
-        try:
-            from graph import build_graph
-            from state import TravelState
-        except ImportError as e:
-            print(f"[warn] Could not import Travel-Agentic-AI: {e}")
-            # Return mock data if Travel-Agentic-AI not available
-            return _get_mock_hotels(destination)
+        # Import local travel agents
+        from travel_agents.graph import build_graph
+        from travel_agents.state import TravelState
         
         print(f"[info] Building travel graph for {destination}...")
         
@@ -98,7 +85,7 @@ def get_hotel_suggestions(
 
 
 def _get_mock_hotels(destination: str) -> List[Dict[str, Any]]:
-    """Return mock hotel data when Travel-Agentic-AI is not available."""
+    """Return mock hotel data when Travel Agent workflow is not available."""
     return [
         {
             "name": f"{destination} Premium Hotel",
