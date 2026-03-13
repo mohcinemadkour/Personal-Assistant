@@ -64,6 +64,41 @@ export const PreferencesScreen: React.FC<PreferencesScreenProps> = ({ initialPre
               onChange={enabled => setPrefs(p => ({ ...p, notifications: enabled }))}
            />
         </div>
+
+        <div className="border-t border-gray-700 pt-6 space-y-4">
+          <div>
+            <label htmlFor="homeLocation" className="block text-sm font-medium text-gray-300 mb-2">
+              Home Location
+            </label>
+            <input
+              type="text"
+              id="homeLocation"
+              placeholder="e.g., Dallas, TX"
+              value={prefs.homeLocation || ''}
+              onChange={e => setPrefs(p => ({ ...p, homeLocation: e.target.value }))}
+              className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:ring-blue-500 focus:border-blue-500"
+            />
+            <p className="text-xs text-gray-400 mt-1">Used for filtering travel events by distance</p>
+          </div>
+
+          <div>
+            <label htmlFor="bookingPlatform" className="block text-sm font-medium text-gray-300 mb-2">
+              Preferred Hotel Booking Platform
+            </label>
+            <select
+              id="bookingPlatform"
+              value={prefs.bookingPlatform || 'booking.com'}
+              onChange={e => setPrefs(p => ({ ...p, bookingPlatform: e.target.value as any }))}
+              className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="booking.com">Booking.com</option>
+              <option value="expedia.com">Expedia.com</option>
+              <option value="hotels.com">Hotels.com</option>
+              <option value="native">Native Hotel Website</option>
+            </select>
+            <p className="text-xs text-gray-400 mt-1">Used for hotel booking links in Travel Tab</p>
+          </div>
+        </div>
       </div>
       
       <div className="mt-8 text-right">

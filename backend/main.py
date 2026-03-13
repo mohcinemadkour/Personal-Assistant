@@ -734,6 +734,7 @@ async def get_hotel_suggestions(
     bedrooms: int = 1,
     max_price: float = 200.0,
     min_rating: float = 4.0,
+    booking_platform: str = "booking.com",
 ):
     """
     Get hotel suggestions for a travel destination and date range.
@@ -745,6 +746,7 @@ async def get_hotel_suggestions(
         bedrooms: Number of bedrooms (default: 1)
         max_price: Maximum price per night in USD (default: 200)
         min_rating: Minimum hotel rating (default: 4.0)
+        booking_platform: Preferred booking platform (booking.com, expedia.com, hotels.com, native)
     
     Returns:
         List of hotel recommendations with pricing and booking links
@@ -767,6 +769,7 @@ async def get_hotel_suggestions(
             bedrooms=bedrooms,
             max_price_per_night=max_price,
             min_rating=min_rating,
+            booking_platform=booking_platform,
         )
         
         return {"ok": True, "hotels": hotels}

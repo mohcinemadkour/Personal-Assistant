@@ -98,17 +98,21 @@ export const TravelScreen: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [homeLocation, setHomeLocation] = useState<string | null>(null);
+  const [bookingPlatform, setBookingPlatform] = useState<'booking.com' | 'expedia.com' | 'hotels.com' | 'native'>('booking.com');
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
   const [hotelSuggestions, setHotelSuggestions] = useState<Map<string, HotelSuggestions>>(new Map());
 
   useEffect(() => {
-    // Retrieve home location from localStorage (preferences)
+    // Retrieve home location and booking platform from localStorage (preferences)
     try {
       const prefsStr = localStorage.getItem('preferences');
       if (prefsStr) {
         const prefs = JSON.parse(prefsStr);
         if (prefs.homeLocation) {
           setHomeLocation(prefs.homeLocation);
+        }
+        if (prefs.bookingPlatform) {
+          setBookingPlatform(prefs.bookingPlatform);
         }
       }
     } catch (e) {
@@ -274,9 +278,9 @@ export const TravelScreen: React.FC = () => {
       const startDate = event.startTime.split('T')[0];
       const endDate = event.endTime.split('T')[0];
       
-      // Get hotel suggestions
+      // Get hotel suggestions with booking platform preference
       const response = await fetch(
-        `/api/hotel-suggestions?destination=${encodeURIComponent(eventCity)}&start_date=${startDate}&end_date=${endDate}&bedrooms=1&max_price=300&min_rating=3.5`
+        `/api/hotel-suggestions?destination=${encodeURIComponent(eventCity)}&start_date=${startDate}&end_date=${endDate}&bedrooms=1&max_price=300&min_rating=3.5&booking_platform=${encodeURIComponent(bookingPlatform)}`
       );
       
       if (!response.ok) {
