@@ -452,6 +452,15 @@ export const TravelScreen: React.FC = () => {
 
                       {expandedEventId === event.id && (
                         <div className="mt-4">
+                          {/* Show booking dates */}
+                          <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                            <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-1">Hotel Dates</p>
+                            <p className="text-sm text-blue-900 font-medium">
+                              {formatDate(event.startTime)} → {formatDate(event.endTime)}
+                              <span className="text-xs text-blue-700 ml-2">({event.duration} night{event.duration !== 1 ? 's' : ''})</span>
+                            </p>
+                          </div>
+
                           {hotelSuggestions.get(event.id)?.loading ? (
                             <div className="text-center py-4">
                               <div className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-gray-300 border-t-amber-600"></div>
