@@ -15,6 +15,11 @@ const CITY_COORDINATES: Record<string, { lat: number; lon: number }> = {
   'austin': { lat: 30.2672, lon: -97.7431 },
   'san antonio': { lat: 29.4241, lon: -98.4936 },
   'fort worth': { lat: 32.7555, lon: -97.3308 },
+  'frisco': { lat: 33.1614, lon: -96.8236 },
+  'plano': { lat: 33.0198, lon: -96.6989 },
+  'richardson': { lat: 32.9483, lon: -96.7313 },
+  'arlington': { lat: 32.7357, lon: -97.1081 },
+  'irving': { lat: 32.8153, lon: -97.2244 },
   'atlanta': { lat: 33.7490, lon: -84.3880 },
   'chicago': { lat: 41.8781, lon: -87.6298 },
   'new york': { lat: 40.7128, lon: -74.0060 },
@@ -46,10 +51,27 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 // Extract city from location string
 function extractCity(location: string): string | null {
   if (!location) return null;
-  // Try to extract city from format like "City Name, State" or "City Name"
-  const parts = location.split(',');
-  const city = parts[0].trim().toLowerCase();
-  return city;
+  
+  const locationLower = location.toLowerCase();
+  
+  // Try to match against known cities in CITY_COORDINATES
+  for (const city of Object.keys(CITY_COORDINATES)) {
+    if (locationLower.includes(city)) {
+      return city;
+    }
+  }
+  
+  // Fallback: try to extract city from format like "City Name, State" or "City Name"
+  const parts = locationLower.split(/[,\-]/);
+  if (parts.length > 0) {
+    const candidate = parts[0].trim();
+    // Check if the first part is a known city
+    if (CITY_COORDINATES[candidate]) {
+      return candidate;
+    }
+  }
+  
+  return null;
 }
 
 export const TravelScreen: React.FC = () => {
@@ -72,14 +94,20 @@ export const TravelScreen: React.FC = () => {
     } catch (e) {
       console.error('Failed to load preferences:', e);
     }
-    fetchTravelEvents();
   }, []);
+
+  // Fetch events after home location is set
+  useEffect(() => {
+    if (homeLocation) {
+      fetchTravelEvents();
+    }
+  }, [homeLocation]);
 
   const fetchTravelEvents = async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/calendar/events?days=180');
+      const response = await fetch('/api/calendar/events?days=365');
       const data = await response.json();
       
       if (!response.ok) {
@@ -109,12 +137,17 @@ export const TravelScreen: React.FC = () => {
   const filterTravelEvents = (events: CalendarEvent[], home: string | null): TravelEvent[] => {
     return events
       .filter((event) => {
-        // Must have a location
+        // Must have a location and not be an online/virtual meeting
         if (!event.location || event.location.trim() === '') {
           return false;
         }
         
-        // If we have a home location, calculate distance
+        const locationLower = event.location.toLowerCase();
+        if (locationLower.includes('online') || locationLower.includes('virtual') || locationLower.includes('zoom') || locationLower.includes('teams')) {
+          return false;
+        }
+        
+        // If we have a home location, calculate distance and enforce 100+ mile requirement
         if (home) {
           const homeCity = extractCity(home);
           const eventCity = extractCity(event.location);
@@ -130,7 +163,14 @@ export const TravelScreen: React.FC = () => {
               if (distance < 100) {
                 return false;
               }
+              return true;
+            } else {
+              // Location cannot be resolved to known coordinates - filter it out
+              return false;
             }
+          } else {
+            // Could not extract cities - filter it out
+            return false;
           }
         }
         
@@ -193,7 +233,7 @@ export const TravelScreen: React.FC = () => {
       <div className="flex justify-between items-center mb-6">
         <div>
           <h2 className="text-3xl font-bold text-gray-900">Upcoming Travel</h2>
-          <p className="text-gray-500">Manage your travel plans for the next 6 months.</p>
+          <p className="text-gray-500">Manage your travel plans for the next 1 year.</p>
         </div>
         <Button onClick={fetchTravelEvents} disabled={loading} className="flex items-center gap-2">
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -241,7 +281,7 @@ export const TravelScreen: React.FC = () => {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
           </svg>
           <p className="text-gray-500 text-lg font-semibold">No travel events found</p>
-          <p className="text-gray-400 text-sm mt-2">You don't have any travel-related events scheduled in the next 6 months.</p>
+          <p className="text-gray-400 text-sm mt-2">You don't have any travel-related events scheduled in the next 1 year.</p>
           <Button onClick={fetchTravelEvents} className="mt-4">Check Calendar</Button>
         </div>
       ) : (
@@ -252,7 +292,7 @@ export const TravelScreen: React.FC = () => {
                 Travel Events: <span className="text-amber-600">{travelEvents.length}</span>
               </h3>
               <p className="text-sm text-gray-600 mt-2">
-                Found {travelEvents.length} travel-related event{travelEvents.length !== 1 ? 's' : ''} in the next 6 months
+                Found {travelEvents.length} travel-related event{travelEvents.length !== 1 ? 's' : ''} in the next 1 year
               </p>
             </div>
           )}

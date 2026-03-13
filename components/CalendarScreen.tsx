@@ -20,7 +20,7 @@ export const CalendarScreen: React.FC<CalendarScreenProps> = ({ onBack }) => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/calendar/events');
+      const response = await fetch('/api/calendar/events?days=365');
       const data = await response.json();
       
       if (!response.ok) {
