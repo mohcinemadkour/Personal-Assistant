@@ -13,7 +13,14 @@ from typing import Any
 import uuid
 import subprocess
 import json as _json
-from whatsapp_service import whatsapp_service
+try:
+    from whatsapp_service import whatsapp_service
+except ImportError:
+    # Create a mock whatsapp_service if not available
+    class MockWhatsAppService:
+        def start(self):
+            pass
+    whatsapp_service = MockWhatsAppService()
 
 # Load environment variables from .env file
 from dotenv import load_dotenv
@@ -752,6 +759,13 @@ async def get_hotel_suggestions(
         List of hotel recommendations with pricing and booking links
     """
     try:
+        import sys
+        import os
+        # Ensure backend directory is in path for imports
+        backend_dir = os.path.dirname(os.path.abspath(__file__))
+        if backend_dir not in sys.path:
+            sys.path.insert(0, backend_dir)
+        
         from hotel_service import get_hotel_suggestions as search_hotels
         
         # Validate input
@@ -776,6 +790,8 @@ async def get_hotel_suggestions(
     
     except Exception as e:
         print(f"[error] Hotel suggestions failed: {e}")
+        import traceback
+        traceback.print_exc()
         return JSONResponse(
             {"ok": False, "error": str(e)},
             status_code=500
