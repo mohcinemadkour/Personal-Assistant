@@ -432,6 +432,24 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ initialPrefs, on
             />
             <p className="text-xs text-gray-500 mt-2">Enter your home city to filter events that require traveling over 100 miles.</p>
           </div>
+
+          <div className="border-t border-gray-200 pt-6">
+            <label htmlFor="bookingPlatform" className="block text-sm font-medium text-gray-600 mb-2">
+              Preferred Hotel Booking Platform
+            </label>
+            <select
+              id="bookingPlatform"
+              value={prefs.bookingPlatform || 'booking.com'}
+              onChange={e => setPrefs(p => ({ ...p, bookingPlatform: e.target.value as any }))}
+              className="w-full bg-white border border-gray-300 rounded-md px-3 py-2 text-gray-800 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="booking.com">Booking.com</option>
+              <option value="expedia.com">Expedia.com</option>
+              <option value="hotels.com">Hotels.com</option>
+              <option value="native">Native Hotel Website</option>
+            </select>
+            <p className="text-xs text-gray-500 mt-2">Used for generating hotel booking links in the Travel Tab with your preferred platform and event dates.</p>
+          </div>
         </div>
         
         <div className="mt-8 text-right">
