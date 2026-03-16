@@ -25,6 +25,8 @@ const App: React.FC = () => {
         frequency: 'Daily',
         time: '08:00',
         notifications: true,
+        homeLocation: '',
+        bookingPlatform: 'booking.com',
     });
     const [selectedNewsletters, setSelectedNewsletters] = useState<Newsletter[]>([]);
     const [priorityKeywords, setPriorityKeywords] = useState<string[]>([]);
