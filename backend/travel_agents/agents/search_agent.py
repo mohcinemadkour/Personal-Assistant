@@ -25,7 +25,9 @@ def live_search(state):
             end_date=state.end_date,
             max_price_per_night=state.max_price_per_night,
             min_rating=state.min_rating,
-            adults=2,
+            adults=state.adults or 2,
+            children=state.children or 0,
+            sort_by=state.sort_by or "rating",
             limit=10,
         )
     elif hotel_destination and (os.getenv("GOOGLE_PLACES_API_KEY") or os.getenv("GOOGLE_MAPS_API_KEY")):

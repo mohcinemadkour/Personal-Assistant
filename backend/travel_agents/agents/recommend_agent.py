@@ -45,15 +45,16 @@ def recommend_hotels(state):
     hotels_sorted = sorted(hotels, key=score)
     top_hotels = hotels_sorted[:5]
 
-    # Ensure each has a real, clickable URL
+    # Ensure each has a real, clickable URL (preserve existing booking/maps links from SerpAPI/Places)
+    # Suppress serpapi.com links — they are API URLs, not user-facing booking pages
     for h in top_hotels:
         name = h.get("name") or ""
         city = h.get("city") or state.destination
         country = h.get("country") or ""
         url = (h.get("url") or "").strip()
-        if not url or not url.startswith("http"):
+        if not url or not url.startswith("http") or "serpapi.com" in url:
             h["url"] = _hotel_search_url(name, city, country)
-        # map_url
+        # map_url: use existing url if it's already a Google Maps link, else build one
         existing = (h.get("url") or "").strip()
         if "google.com/maps" in existing:
             h["map_url"] = existing

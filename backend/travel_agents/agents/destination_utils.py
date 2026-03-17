@@ -1,4 +1,12 @@
-"""Resolve destination for hotel search."""
+"""
+Resolve destination for hotel search.
+When user provides an airport code (e.g. MCO, JFK), resolve to city name
+so hotel APIs return relevant results.
+Uses airports.csv / airport-codes.csv; falls back to a static mapping.
+"""
+
+import csv
+import os
 
 _FALLBACK_IATA_TO_CITY = {
     "BOM": "Mumbai",
@@ -76,6 +84,51 @@ _FALLBACK_IATA_TO_CITY = {
 }
 
 
+def _load_iata_to_city_from_csv() -> dict[str, str]:
+    """Load IATA -> city mapping from airports.csv or airport-codes.csv."""
+    iata_to_city: dict[str, tuple[str, int]] = {}
+    priority = {"large_airport": 3, "medium_airport": 2, "small_airport": 1}
+    csv_names = ["airports.csv", "airport-codes.csv"]
+
+    # Check both the backend root and cwd
+    search_dirs = [
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        os.getcwd(),
+    ]
+    for base in search_dirs:
+        for csv_name in csv_names:
+            path = os.path.join(base, csv_name)
+            if not os.path.isfile(path):
+                continue
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        iata = (row.get("iata_code") or "").strip()
+                        city = (row.get("municipality") or "").strip()
+                        if iata and len(iata) == 3 and iata.isalpha() and city:
+                            p = priority.get(row.get("type", ""), 0)
+                            if iata not in iata_to_city or p > iata_to_city[iata][1]:
+                                iata_to_city[iata] = (city, p)
+                if iata_to_city:
+                    return {k: v[0] for k, v in iata_to_city.items()}
+            except Exception:
+                pass
+    return {}
+
+
+_IATA_TO_CITY_CACHE: dict[str, str] | None = None
+
+
+def _get_iata_to_city() -> dict[str, str]:
+    global _IATA_TO_CITY_CACHE
+    if _IATA_TO_CITY_CACHE is None:
+        _IATA_TO_CITY_CACHE = _load_iata_to_city_from_csv()
+        if not _IATA_TO_CITY_CACHE:
+            _IATA_TO_CITY_CACHE = _FALLBACK_IATA_TO_CITY.copy()
+    return _IATA_TO_CITY_CACHE
+
+
 def _looks_like_iata(text: str) -> bool:
     if not text or len(text) != 3:
         return False
@@ -95,7 +148,8 @@ def resolve_destination_for_hotels(destination: str) -> str:
         return dest
 
     iata = dest.upper()
-    city = _FALLBACK_IATA_TO_CITY.get(iata)
+    iata_to_city = _get_iata_to_city()
+    city = iata_to_city.get(iata)
     if city:
         return city
     return dest

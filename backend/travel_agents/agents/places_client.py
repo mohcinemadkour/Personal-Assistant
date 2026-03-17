@@ -115,6 +115,7 @@ def fetch_hotels_from_places(
 
         hotels.append({
             "name": name,
+            "address": formatted_address,
             "city": city,
             "country": country,
             "price": price,

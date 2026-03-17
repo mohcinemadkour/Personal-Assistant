@@ -739,24 +739,30 @@ async def get_hotel_suggestions(
     start_date: str,
     end_date: str,
     bedrooms: int = 1,
-    max_price: float = 200.0,
-    min_rating: float = 4.0,
-    booking_platform: str = "booking.com",
+    max_price: float = 300.0,
+    min_rating: float = 3.5,
+    adults: int = 2,
+    children: int = 0,
+    sort_by: str = "rating",
+    currency: str = "USD",
 ):
     """
     Get hotel suggestions for a travel destination and date range.
     
     Args:
-        destination: Destination city name (e.g., "New York")
+        destination: Destination city name (e.g., "New York") or IATA code (e.g., "JFK")
         start_date: Check-in date in YYYY-MM-DD format
         end_date: Check-out date in YYYY-MM-DD format
-        bedrooms: Number of bedrooms (default: 1)
-        max_price: Maximum price per night in USD (default: 200)
-        min_rating: Minimum hotel rating (default: 4.0)
-        booking_platform: Preferred booking platform (booking.com, expedia.com, hotels.com, native)
+        bedrooms: Number of rooms (default: 1)
+        max_price: Maximum price per night in USD (default: 300)
+        min_rating: Minimum hotel rating (default: 3.5)
+        adults: Number of adult guests (default: 2)
+        children: Number of child guests (default: 0)
+        sort_by: Sort by "rating" or "price" (default: rating)
+        currency: Currency code USD/EUR/GBP (default: USD)
     
     Returns:
-        List of hotel recommendations with pricing and booking links
+        List of hotel recommendations with url and map_url
     """
     try:
         import sys
@@ -783,7 +789,10 @@ async def get_hotel_suggestions(
             bedrooms=bedrooms,
             max_price_per_night=max_price,
             min_rating=min_rating,
-            booking_platform=booking_platform,
+            adults=adults,
+            children=children,
+            sort_by=sort_by,
+            currency=currency,
         )
         
         return {"ok": True, "hotels": hotels}
